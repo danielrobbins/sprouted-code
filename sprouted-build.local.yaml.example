@@ -1,0 +1,56 @@
+# Copy this file to sprouted-build.local.yaml and update the builders you use.
+# The local file is ignored by Git. Authentication belongs in SSH configuration
+# and an SSH agent; do not put passwords or private keys here.
+
+builders:
+  windows:
+    vscode_checkout: 'C:\src\sprouted-code-build\vscode'
+    # The portable defaults search C:\Tools\Node for Node 24. Set node_path
+    # only when the required Node installation lives somewhere else.
+    # node_path: 'C:\Tools\Node\node-v24.18.0-win-x64'
+    # Set visual_studio_path only when automatic discovery does not find it.
+    # visual_studio_path: 'C:\Program Files\Microsoft Visual Studio\18\Community'
+
+  wsl:
+    # Keep each checkout in the native Linux filesystem, never under /mnt/c.
+    arm64:
+      distro: Ubuntu-24.04
+      vscode_checkout: ~/repos/sprouted-code-build/vscode
+      user: builder
+      cc: gcc
+      cxx: g++
+    x64:
+      distro: Ubuntu-24.04-x64
+      vscode_checkout: ~/repos/sprouted-code-build/vscode
+      user: builder
+      cc: gcc
+      cxx: g++
+
+  proxmox:
+    # The SSH target is the Proxmox host. The container must already exist,
+    # and the SSH user must be able to run pct through passwordless sudo.
+    arm64:
+      ssh_target: builder@proxmox-arm.example.net
+      container_id: 301
+      remote_owner: builder
+      vscode_checkout: /root/repos/sprouted-code-build/vscode
+      node_root: /root/.local
+      artifact_directory: /root/artifacts
+      cc: gcc
+      cxx: g++
+    x64:
+      ssh_target: builder@proxmox-x64.example.net
+      container_id: 302
+      remote_owner: builder
+      vscode_checkout: /root/repos/sprouted-code-build/vscode
+      node_root: /root/.local
+      artifact_directory: /root/artifacts
+      cc: gcc
+      cxx: g++
+
+  macos:
+    arm64:
+      ssh_target: builder@mac-builder.example.net
+      vscode_checkout: /Users/builder/repos/sprouted-code-build/vscode
+      node_root: /Users/builder/.local
+      artifact_directory: /Users/builder/artifacts

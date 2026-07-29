@@ -1,0 +1,8 @@
+artifacts/
+probe-data/
+probe-extensions/
+.pytest_cache/
+.venv/
+__pycache__/
+*.py[cod]
+sprouted-build.local.yaml

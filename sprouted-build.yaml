@@ -1,0 +1,77 @@
+schema_version: 1
+
+# Release identity and patch provenance remain in the release manifest. This
+# file describes portable builder defaults only. Put machine-specific values in
+# sprouted-build.local.yaml, which is ignored by Git.
+release_manifest: manifests/sprouted-code-2026.07.0.json
+
+paths:
+  artifacts: artifacts
+  patches: patches
+
+toolchain:
+  node_version: 24.18.0
+
+source:
+  upstream_url: https://github.com/microsoft/vscode.git
+  build_branch_prefix: sprouted-code
+
+product:
+  extension_gallery:
+    enabled: true
+    patch: patches/0008-enable-microsoft-extension-marketplace.patch
+    verify_signatures: false
+    signature_policy_patch: patches/0009-configure-extension-signature-verification.patch
+
+builders:
+  windows:
+    vscode_checkout: null
+    node_root: 'C:\Tools\Node'
+    node_path: null
+    visual_studio_path: null
+    install_dir: 'C:\Tools\Sprouted Code'
+
+  wsl:
+    default_architecture: arm64
+    arm64:
+      distro: Ubuntu-26.04
+      vscode_checkout: ~/repos/vscode
+      cc: gcc
+      cxx: g++
+      user: null
+    x64:
+      # Configure a native x86_64 distro locally if the Windows host supports it.
+      distro: null
+      vscode_checkout: ~/repos/vscode
+      cc: gcc
+      cxx: g++
+      user: null
+
+  proxmox:
+    default_architecture: x64
+    arm64:
+      ssh_target: null
+      container_id: null
+      remote_owner: null
+      vscode_checkout: /root/repos/sprouted-code-build/vscode
+      node_root: /root/.local
+      artifact_directory: /root/artifacts
+      cc: gcc
+      cxx: g++
+    x64:
+      ssh_target: null
+      container_id: null
+      remote_owner: null
+      vscode_checkout: /root/repos/sprouted-code-build/vscode
+      node_root: /root/.local
+      artifact_directory: /root/artifacts
+      cc: gcc
+      cxx: g++
+
+  macos:
+    default_architecture: arm64
+    arm64:
+      ssh_target: null
+      vscode_checkout: ~/repos/sprouted-code-build/vscode
+      node_root: ~/.local
+      artifact_directory: ~/artifacts

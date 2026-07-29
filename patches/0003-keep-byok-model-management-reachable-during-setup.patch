@@ -1,0 +1,79 @@
+diff --git a/src/vs/workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerItems.ts b/src/vs/workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerItems.ts
+index f999ae6f49e..a1376c4c03e 100644
+--- a/src/vs/workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerItems.ts
++++ b/src/vs/workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerItems.ts
+@@ -360,6 +360,10 @@ export function buildModelPickerItems(
+ 		// prompt) instead of a misleading lone "Auto". Like restricted mode this
+ 		// is checked before the empty-list branch since stale machine-cached
+ 		// entries can make `models` non-empty.
++		//
++		// If BYOK model management is available, keep it reachable here too. A
++		// first-run BYOK user can be signed out and have no configured models yet;
++		// hiding Manage Models behind setup would leave no path to add one.
+ 		items.push({
+ 			kind: ActionListItemKind.Header,
+ 			label: localize('chat.modelPicker.setupRequired', "Sign in to use Copilot"),
+@@ -380,6 +384,16 @@ export function buildModelPickerItems(
+ 			disabled: !onRequestSetup,
+ 			hideIcon: false,
+ 		});
++		if (manageModelsAction) {
++			items.push({ kind: ActionListItemKind.Separator });
++			items.push({
++				item: manageModelsAction,
++				kind: ActionListItemKind.Action,
++				label: manageModelsAction.label,
++				group: { title: '', icon: ThemeIcon.fromId(Codicon.gear.id) },
++				hideIcon: false,
++			});
++		}
+ 		return items;
+ 	}
+ 	if (models.length === 0) {
+diff --git a/src/vs/workbench/contrib/chat/test/browser/widget/input/modelPicker/modelPickerItems.test.ts b/src/vs/workbench/contrib/chat/test/browser/widget/input/modelPicker/modelPickerItems.test.ts
+index 79cb1ed6776..01252a85a15 100644
+--- a/src/vs/workbench/contrib/chat/test/browser/widget/input/modelPicker/modelPickerItems.test.ts
++++ b/src/vs/workbench/contrib/chat/test/browser/widget/input/modelPicker/modelPickerItems.test.ts
+@@ -142,6 +142,7 @@ function callBuild(
+ 		onRequestTrust?: () => void;
+ 		setupRequired?: boolean;
+ 		onRequestSetup?: () => void;
++		manageModelsAction?: IActionWidgetDropdownAction | undefined;
+ 	} = {},
+ ): IActionListItem<IActionWidgetDropdownAction>[] {
+ 	const onSelect = () => { };
+@@ -161,7 +162,7 @@ function callBuild(
+ 		undefined,
+ 		opts.manageSettingsUrl,
+ 		true,
+-		stubManageModelsAction,
++		Object.hasOwn(opts, 'manageModelsAction') ? opts.manageModelsAction : stubManageModelsAction,
+ 		entitlementService,
+ 		opts.showUnavailableFeatured ?? true,
+ 		opts.showFeatured ?? true,
+@@ -330,14 +331,23 @@ suite('buildModelPickerItems', () => {
+ 		assert.strictEqual(actions.some(a => a.item?.id === 'restrictedModeTrust'), true);
+ 	});
+ 
+-	test('setupRequired shows an explanatory header and a Sign In action instead of auto', () => {
++	test('setupRequired shows Sign In and keeps Manage Models reachable when available', () => {
+ 		const items = callBuild([], { setupRequired: true, onRequestSetup: () => { } });
+ 		const actions = getActionItems(items);
+ 		assert.ok(items.some(i => i.kind === ActionListItemKind.Header && i.label === 'Sign in to use Copilot'));
+-		assert.strictEqual(actions.length, 1);
++		assert.strictEqual(actions.length, 2);
+ 		assert.strictEqual(actions[0].item?.id, 'setupRequiredSignIn');
+ 		assert.strictEqual(actions[0].item?.enabled, true);
++		assert.strictEqual(actions[1].item?.id, 'manageModels');
+ 		assert.strictEqual(actions.some(a => a.label === 'Auto'), false);
++		assert.strictEqual(getSeparatorCount(items), 1);
++	});
++
++	test('setupRequired omits Manage Models when no management action is available', () => {
++		const items = callBuild([], { setupRequired: true, onRequestSetup: () => { }, manageModelsAction: undefined });
++		const actions = getActionItems(items);
++		assert.strictEqual(actions.length, 1);
++		assert.strictEqual(actions[0].item?.id, 'setupRequiredSignIn');
+ 		assert.strictEqual(actions.some(a => a.item?.id === 'manageModels'), false);
+ 	});
+ 

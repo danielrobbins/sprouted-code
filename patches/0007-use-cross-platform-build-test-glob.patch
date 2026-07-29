@@ -1,0 +1,13 @@
+diff --git a/build/package.json b/build/package.json
+index 84db71fd0f9..3c0b3880bab 100644
+--- a/build/package.json
++++ b/build/package.json
+@@ -69,7 +69,7 @@
+     "pretypecheck": "npm run copy-policy-dto",
+     "typecheck": "cd .. && npx tsc --project build/tsconfig.json",
+     "watch": "npm run typecheck -- --watch",
+-    "test": "node --test '{lib,next,agent-sdk,codex}/**/*.test.ts'"
++    "test": "node --test \"{lib,next,agent-sdk,codex}/**/*.test.ts\""
+   },
+   "optionalDependencies": {
+     "tree-sitter-typescript": "^0.23.2",

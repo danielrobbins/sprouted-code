@@ -1,0 +1,129 @@
+diff --git a/build/gulpfile.reh.ts b/build/gulpfile.reh.ts
+index a40ff6f6db1..2f158dde401 100644
+--- a/build/gulpfile.reh.ts
++++ b/build/gulpfile.reh.ts
+@@ -33,6 +33,7 @@ import { fetchUrls } from './lib/fetch.ts';
+ import { downloadFeedPackage } from './lib/azureFeed.ts';
+ import { ensureCopilotPlatformPackage, getCopilotExcludeFilter, getCopilotRuntimePrebuildFiles, getCopilotTgrepExcludeFilter, getMxcExcludeFilter, getRipgrepExcludeFilter, prepareBuiltInCopilotRipgrepShim } from './lib/copilot.ts';
+ import { readAgentSdkResults } from './agent-sdk/common.ts';
++import { isWindowsPortableExecutable } from './lib/win32.ts';
+ 
+ 
+ const rcedit = promisify(rceditCallback);
+@@ -582,6 +583,9 @@ function patchWin32DependenciesTask(destinationFolderName: string) {
+ 			const basename = path.basename(dep);
+ 			const fullPath = path.join(cwd, dep);
+ 
++			if (!await isWindowsPortableExecutable(fullPath)) {
++				return;
++			}
+ 			await stripAuthenticodeSignature(fullPath);
+ 			await rcedit(fullPath, {
+ 				'file-version': baseVersion,
+diff --git a/build/gulpfile.vscode.ts b/build/gulpfile.vscode.ts
+index e4f060cb925..e07f72f95fb 100644
+--- a/build/gulpfile.vscode.ts
++++ b/build/gulpfile.vscode.ts
+@@ -37,6 +37,7 @@ import globCallback from 'glob';
+ import rceditCallback from 'rcedit';
+ import { spawnTsgo } from './lib/tsgo.ts';
+ import { runEsbuildTranspile, runEsbuildBundle } from './lib/esbuild.ts';
++import { isWindowsPortableExecutable } from './lib/win32.ts';
+ 
+ 
+ const glob = promisify(globCallback);
+@@ -637,6 +638,9 @@ function patchWin32DependenciesTask(destinationFolderName: string) {
+ 			const basename = path.basename(dep);
+ 			const fullPath = path.join(cwd, dep);
+ 
++			if (!await isWindowsPortableExecutable(fullPath)) {
++				return;
++			}
+ 			await stripAuthenticodeSignature(fullPath);
+ 			await rcedit(fullPath, {
+ 				'file-version': baseVersion,
+diff --git a/build/lib/test/win32.test.ts b/build/lib/test/win32.test.ts
+new file mode 100644
+index 00000000000..c8286db3714
+--- /dev/null
++++ b/build/lib/test/win32.test.ts
+@@ -0,0 +1,44 @@
++/*---------------------------------------------------------------------------------------------
++ *  Copyright (c) Microsoft Corporation. All rights reserved.
++ *  Licensed under the MIT License. See License.txt in the project root for license information.
++ *--------------------------------------------------------------------------------------------*/
++
++import assert from 'assert';
++import * as fs from 'fs';
++import * as os from 'os';
++import * as path from 'path';
++import { after, suite, test } from 'node:test';
++import { isWindowsPortableExecutable } from '../win32.ts';
++
++suite('win32', () => {
++	const testDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'vscode-win32-test-'));
++	after(() => fs.rmSync(testDirectory, { recursive: true, force: true }));
++
++	async function writeFixture(name: string, contents: Buffer): Promise<string> {
++		const filePath = path.join(testDirectory, name);
++		await fs.promises.writeFile(filePath, contents);
++		return filePath;
++	}
++
++	test('recognizes a PE binary', async () => {
++		const contents = Buffer.alloc(0x84);
++		contents.write('MZ');
++		contents.writeUInt32LE(0x80, 0x3c);
++		contents.set([0x50, 0x45, 0x00, 0x00], 0x80);
++
++		assert.strictEqual(await isWindowsPortableExecutable(await writeFixture('native.node', contents)), true);
++	});
++
++	test('rejects non-PE and malformed binaries', async () => {
++		const elf = Buffer.from([0x7f, 0x45, 0x4c, 0x46]);
++		const truncated = Buffer.from('MZ');
++		const invalidSignature = Buffer.alloc(0x84);
++		invalidSignature.write('MZ');
++		invalidSignature.writeUInt32LE(0x80, 0x3c);
++		invalidSignature.write('NOPE', 0x80);
++
++		assert.strictEqual(await isWindowsPortableExecutable(await writeFixture('linux.node', elf)), false);
++		assert.strictEqual(await isWindowsPortableExecutable(await writeFixture('truncated.node', truncated)), false);
++		assert.strictEqual(await isWindowsPortableExecutable(await writeFixture('invalid.node', invalidSignature)), false);
++	});
++});
+diff --git a/build/lib/win32.ts b/build/lib/win32.ts
+new file mode 100644
+index 00000000000..5950c1edc59
+--- /dev/null
++++ b/build/lib/win32.ts
+@@ -0,0 +1,29 @@
++/*---------------------------------------------------------------------------------------------
++ *  Copyright (c) Microsoft Corporation. All rights reserved.
++ *  Licensed under the MIT License. See License.txt in the project root for license information.
++ *--------------------------------------------------------------------------------------------*/
++
++import * as fs from 'fs';
++
++const DOS_HEADER_SIZE = 64;
++const PE_HEADER_OFFSET = 0x3c;
++const PE_SIGNATURE_SIZE = 4;
++
++export async function isWindowsPortableExecutable(filePath: string): Promise<boolean> {
++	const file = await fs.promises.open(filePath, 'r');
++	try {
++		const dosHeader = Buffer.alloc(DOS_HEADER_SIZE);
++		const dosRead = await file.read(dosHeader, 0, dosHeader.length, 0);
++		if (dosRead.bytesRead !== dosHeader.length || dosHeader.toString('ascii', 0, 2) !== 'MZ') {
++			return false;
++		}
++
++		const peHeaderOffset = dosHeader.readUInt32LE(PE_HEADER_OFFSET);
++		const peSignature = Buffer.alloc(PE_SIGNATURE_SIZE);
++		const peRead = await file.read(peSignature, 0, peSignature.length, peHeaderOffset);
++		return peRead.bytesRead === peSignature.length
++			&& peSignature.equals(Buffer.from([0x50, 0x45, 0x00, 0x00]));
++	} finally {
++		await file.close();
++	}
++}

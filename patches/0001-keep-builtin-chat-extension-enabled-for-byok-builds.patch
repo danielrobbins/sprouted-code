@@ -1,0 +1,55 @@
+diff --git a/product.json b/product.json
+index 15f5796e3ac..a300483147e 100644
+--- a/product.json
++++ b/product.json
+@@ -89,6 +89,7 @@
+ 	"defaultChatAgent": {
+ 		"extensionId": "GitHub.copilot",
+ 		"chatExtensionId": "GitHub.copilot-chat",
++		"keepBuiltinChatExtensionEnabled": true,
+ 		"chatExtensionOutputId": "GitHub.copilot-chat.GitHub Copilot Chat.log",
+ 		"chatExtensionOutputExtensionStateCommand": "github.copilot.debug.extensionState",
+ 		"documentationUrl": "https://aka.ms/github-copilot-overview",
+diff --git a/src/vs/base/common/product.ts b/src/vs/base/common/product.ts
+index 5af093a6519..9692a83019b 100644
+--- a/src/vs/base/common/product.ts
++++ b/src/vs/base/common/product.ts
+@@ -401,6 +401,8 @@ export interface IAiGeneratedWorkspaceTrust {
+ export interface IDefaultChatAgent {
+ 	readonly extensionId: string;
+ 	readonly chatExtensionId: string;
++	// Product builds that ship the chat extension for BYOK setup can keep it enabled on first run.
++	readonly keepBuiltinChatExtensionEnabled?: boolean;
+ 
+ 	readonly chatExtensionOutputId: string;
+ 	readonly chatExtensionOutputExtensionStateCommand: string;
+diff --git a/src/vs/workbench/services/extensionManagement/browser/extensionEnablementService.ts b/src/vs/workbench/services/extensionManagement/browser/extensionEnablementService.ts
+index 06b68e071fd..d31da3b3c91 100644
+--- a/src/vs/workbench/services/extensionManagement/browser/extensionEnablementService.ts
++++ b/src/vs/workbench/services/extensionManagement/browser/extensionEnablementService.ts
+@@ -58,6 +58,7 @@ export class ExtensionEnablementService extends Disposable implements IWorkbench
+ 	// Extension unification
+ 	private readonly _completionsExtensionId: string | undefined;
+ 	private readonly _chatExtensionId: string | undefined;
++	private readonly _keepBuiltinChatExtensionEnabled: boolean;
+ 	private _extensionUnificationEnabled: boolean;
+ 
+ 	// Sessions window allow-list (lowercased extension ids)
+@@ -114,6 +115,7 @@ export class ExtensionEnablementService extends Disposable implements IWorkbench
+ 		// Extension unification
+ 		this._completionsExtensionId = productService.defaultChatAgent?.extensionId.toLowerCase();
+ 		this._chatExtensionId = productService.defaultChatAgent?.chatExtensionId.toLowerCase();
++		this._keepBuiltinChatExtensionEnabled = productService.defaultChatAgent?.keepBuiltinChatExtensionEnabled === true;
+ 		this._sessionsWindowAllowedExtensions = new Set<string>((productService.sessionsWindowAllowedExtensions ?? []).map(id => id.toLowerCase()));
+ 		const unificationExtensions = [this._completionsExtensionId, this._chatExtensionId].filter(id => !!id);
+ 
+@@ -155,6 +157,9 @@ export class ExtensionEnablementService extends Disposable implements IWorkbench
+ 		if (!this._chatExtensionId || this.environmentService.isSessionsWindow || this.environmentService.skipBuiltinExtensions?.some(id => id.toLowerCase() === this._chatExtensionId)) {
+ 			return;
+ 		}
++		if (this._keepBuiltinChatExtensionEnabled) {
++			return;
++		}
+ 
+ 		const builtinChatExtensionEnablementMigrationKey = 'builtinChatExtensionEnablementMigration';
+ 		const builtinChatExtensionEnablementMigration = this.storageService.getBoolean(builtinChatExtensionEnablementMigrationKey, StorageScope.PROFILE) === true;

@@ -1,0 +1,82 @@
+diff --git a/product.json b/product.json
+index 15f5796e3ac..38e4a773d8e 100644
+--- a/product.json
++++ b/product.json
+@@ -1,39 +1,39 @@
+ {
+-	"nameShort": "Code - OSS",
+-	"nameLong": "Code - OSS",
+-	"applicationName": "code-oss",
+-	"dataFolderName": ".vscode-oss",
+-	"sharedDataFolderName": ".vscode-oss-shared",
+-	"win32MutexName": "vscodeoss",
++	"nameShort": "Sprouted Code",
++	"nameLong": "Sprouted Code",
++	"applicationName": "sprouted-code",
++	"dataFolderName": ".sprouted-code",
++	"sharedDataFolderName": ".sprouted-code-shared",
++	"win32MutexName": "sproutedcode",
+ 	"licenseName": "MIT",
+ 	"licenseUrl": "https://github.com/microsoft/vscode/blob/main/LICENSE.txt",
+ 	"serverLicenseUrl": "https://github.com/microsoft/vscode/blob/main/LICENSE.txt",
+ 	"serverGreeting": [],
+ 	"serverLicense": [],
+ 	"serverLicensePrompt": "",
+-	"serverApplicationName": "code-server-oss",
+-	"serverDataFolderName": ".vscode-server-oss",
+-	"tunnelApplicationName": "code-tunnel-oss",
+-	"win32DirName": "Microsoft Code OSS",
+-	"win32NameVersion": "Microsoft Code OSS",
+-	"win32RegValueName": "CodeOSS",
+-	"win32x64AppId": "{{D77B7E06-80BA-4137-BCF4-654B95CCEBC5}",
+-	"win32arm64AppId": "{{D1ACE434-89C5-48D1-88D3-E2991DF85475}",
+-	"win32x64UserAppId": "{{CC6B787D-37A0-49E8-AE24-8559A032BE0C}",
+-	"win32arm64UserAppId": "{{3AEBF0C8-F733-4AD4-BADE-FDB816D53D7B}",
+-	"win32AppUserModelId": "Microsoft.CodeOSS",
+-	"win32ShellNameShort": "C&ode - OSS",
+-	"win32TunnelServiceMutex": "vscodeoss-tunnelservice",
+-	"win32TunnelMutex": "vscodeoss-tunnel",
++	"serverApplicationName": "sprouted-code-server",
++	"serverDataFolderName": ".sprouted-code-server",
++	"tunnelApplicationName": "sprouted-code-tunnel",
++	"win32DirName": "Sprouted Code",
++	"win32NameVersion": "Sprouted Code",
++	"win32RegValueName": "SproutedCode",
++	"win32x64AppId": "{{9C7A42E0-22F3-427F-8B3A-BF19AC3CE89F}",
++	"win32arm64AppId": "{{8D06DF91-3623-48A2-B225-8699C26189B7}",
++	"win32x64UserAppId": "{{44BB1008-613A-4C60-819F-B29106192265}",
++	"win32arm64UserAppId": "{{36EF4E0A-F3D8-4FB1-A08A-54E18B1B11D9}",
++	"win32AppUserModelId": "KernelSeeds.SproutedCode",
++	"win32ShellNameShort": "Sprouted Code",
++	"win32TunnelServiceMutex": "sproutedcode-tunnelservice",
++	"win32TunnelMutex": "sproutedcode-tunnel",
+-	"darwinBundleIdentifier": "com.visualstudio.code.oss",
+-	"darwinProfileUUID": "47827DD9-4734-49A0-AF80-7E19B11495CC",
+-	"darwinProfilePayloadUUID": "CF808BE7-53F3-46C6-A7E2-7EDB98A5E959",
++	"darwinBundleIdentifier": "org.kernel-seeds.sprouted-code",
++	"darwinProfileUUID": "36E93623-B21F-47CA-ABA9-BF61F07AD218",
++	"darwinProfilePayloadUUID": "23DA97BD-9FF3-49D2-AE09-7117563FBE3D",
+-	"linuxIconName": "code-oss",
++	"linuxIconName": "sprouted-code",
+ 	"licenseFileName": "LICENSE.txt",
+-	"reportIssueUrl": "https://github.com/microsoft/vscode/issues/new",
++	"reportIssueUrl": "https://github.com/danielrobbins/sprouted-code/issues/new",
+ 	"nodejsArtifactFeed": "",
+ 	"electronArtifactFeed": "",
+-	"urlProtocol": "code-oss",
++	"urlProtocol": "sprouted-code",
+ 	"agentsTelemetryAppName": "agents",
+ 	"webviewContentExternalBaseUrlTemplate": "https://{{uuid}}.vscode-cdn.net/insider/ef65ac1ba57f57f2a3961bfe94aa20481caca4c6/out/vs/workbench/contrib/webview/browser/pre/",
+ 	"builtInExtensions": [
+diff --git a/build/gulpfile.vscode.ts b/build/gulpfile.vscode.ts
+--- a/build/gulpfile.vscode.ts
++++ b/build/gulpfile.vscode.ts
+@@ -471,7 +471,7 @@ function packageTask(platform: string, arch: string, sourceFolderName: string, d
+            const shortcut = gulp.src('resources/darwin/bin/code.sh')
+                .pipe(replace('@@APPNAME@@', product.applicationName))
+                .pipe(replace('@@NAME@@', product.nameShort))
+-				.pipe(rename('bin/code'));
++				.pipe(rename(`bin/${product.applicationName}`));
+            const policyDest = gulp.src('.build/policies/darwin/**', { base: '.build/policies/darwin' })
+                .pipe(rename(f => f.dirname = `policies/${f.dirname}`));
+            all = es.merge(all, shortcut, policyDest);

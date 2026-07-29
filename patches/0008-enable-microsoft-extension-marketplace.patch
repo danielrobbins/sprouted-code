@@ -1,0 +1,20 @@
+diff --git a/product.json b/product.json
+--- a/product.json
++++ b/product.json
+@@ -35,6 +35,15 @@
+ 	"electronArtifactFeed": "",
+ 	"urlProtocol": "sprouted-code",
+ 	"agentsTelemetryAppName": "agents",
+ 	"webviewContentExternalBaseUrlTemplate": "https://{{uuid}}.vscode-cdn.net/insider/ef65ac1ba57f57f2a3961bfe94aa20481caca4c6/out/vs/workbench/contrib/webview/browser/pre/",
++	"extensionsGallery": {
++		"nlsBaseUrl": "https://www.vscode-unpkg.net/_lp/",
++		"serviceUrl": "https://marketplace.visualstudio.com/_apis/public/gallery",
++		"itemUrl": "https://marketplace.visualstudio.com/items",
++		"publisherUrl": "https://marketplace.visualstudio.com/publishers",
++		"resourceUrlTemplate": "https://{publisher}.vscode-unpkg.net/{publisher}/{name}/{version}/{path}",
++		"extensionUrlTemplate": "https://www.vscode-unpkg.net/_gallery/{publisher}/{name}/latest",
++		"controlUrl": "https://main.vscode-cdn.net/extensions/marketplace.json"
++	},
+ 	"builtInExtensions": [
+ 		{
+ 			"name": "ms-vscode.js-debug-companion",

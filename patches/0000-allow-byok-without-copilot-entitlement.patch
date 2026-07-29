@@ -1,0 +1,585 @@
+diff --git a/extensions/copilot/src/extension/byok/common/byokProvider.ts b/extensions/copilot/src/extension/byok/common/byokProvider.ts
+index adbfe439046c309d44403ca15e01c712913f4a83..2df15faf0e5dc2b94c49cf33c46e02e907b37027 100644
+--- a/extensions/copilot/src/extension/byok/common/byokProvider.ts
++++ b/extensions/copilot/src/extension/byok/common/byokProvider.ts
+@@ -211,17 +211,86 @@ export function byokKnownModelToAPIInfo(providerName: string, id: string, capabi
+ 	};
+ }
+ 
+-/**
+- * Signed-out users are allowed; signed-in users without a Copilot token (e.g. enterprise-managed errors) are denied to avoid bypassing policy.
+- */
+-export function isClientBYOKAllowed(hasGitHubSession: boolean, copilotToken: Omit<CopilotToken, 'token'> | undefined): boolean {
+-	if (!hasGitHubSession) {
+-		return true;
++export const enum ClientBYOKPolicySourceState {
++	// No GitHub identity is available:
++	SignedOut = 'signedOut',
++	// GitHub is signed in, but the account has no Copilot entitlement:
++	NoCopilotEntitlement = 'noCopilotEntitlement',
++	// Copilot access exists but has expired:
++	SubscriptionExpired = 'subscriptionExpired',
++	// Copilot token represents an individual user:
++	Individual = 'individual',
++	// Copilot token represents an internal user:
++	Internal = 'internal',
++	// Copilot token represents a managed Enterprise account:
++	Managed = 'managed',
++	// Enterprise policy applies, but live policy cannot be reached:
++	ManagedPolicyUnavailable = 'managedPolicyUnavailable',
++	// Auth/policy resolution failed without an enterprise policy signal:
++	UnclassifiedAuthFailure = 'unclassifiedAuthFailure',
++}
++
++export const enum ClientBYOKPolicy {
++	Allow = 'allow',
++	Deny = 'deny',
++	Unknown = 'unknown',
++}
++
++export interface ClientBYOKPolicyEvaluation {
++	policySourceState: ClientBYOKPolicySourceState;
++	livePolicy: ClientBYOKPolicy;
++	cachedEnterprisePolicy?: ClientBYOKPolicy;
++	finalPolicy: ClientBYOKPolicy;
++}
++
++export function getClientBYOKPolicySourceStateFromToken(copilotToken: Omit<CopilotToken, 'token'>): ClientBYOKPolicySourceState {
++	if (copilotToken.isInternal) {
++		return ClientBYOKPolicySourceState.Internal;
+ 	}
+-	if (!copilotToken) {
+-		return false;
++	if (copilotToken.isIndividual) {
++		return ClientBYOKPolicySourceState.Individual;
+ 	}
+-	return copilotToken.isInternal || copilotToken.isIndividual || copilotToken.isClientBYOKEnabled();
++	return ClientBYOKPolicySourceState.Managed;
++}
++
++export function getClientBYOKPolicyFromToken(copilotToken: Omit<CopilotToken, 'token'>): ClientBYOKPolicy {
++	return copilotToken.isInternal || copilotToken.isIndividual || copilotToken.isClientBYOKEnabled()
++		? ClientBYOKPolicy.Allow
++		: ClientBYOKPolicy.Deny;
++}
++
++export function evaluateClientBYOKPolicy(
++	policySourceState: ClientBYOKPolicySourceState,
++	livePolicy: ClientBYOKPolicy = ClientBYOKPolicy.Unknown,
++	cachedEnterprisePolicy?: ClientBYOKPolicy
++): ClientBYOKPolicyEvaluation {
++	let finalPolicy: ClientBYOKPolicy;
++	switch (policySourceState) {
++		case ClientBYOKPolicySourceState.SignedOut:
++		case ClientBYOKPolicySourceState.NoCopilotEntitlement:
++		case ClientBYOKPolicySourceState.SubscriptionExpired:
++		case ClientBYOKPolicySourceState.Individual:
++		case ClientBYOKPolicySourceState.Internal:
++			finalPolicy = ClientBYOKPolicy.Allow;
++			break;
++		case ClientBYOKPolicySourceState.Managed:
++			finalPolicy = livePolicy === ClientBYOKPolicy.Unknown
++				? cachedEnterprisePolicy ?? ClientBYOKPolicy.Deny
++				: livePolicy;
++			break;
++		case ClientBYOKPolicySourceState.ManagedPolicyUnavailable:
++			finalPolicy = cachedEnterprisePolicy ?? ClientBYOKPolicy.Deny;
++			break;
++		case ClientBYOKPolicySourceState.UnclassifiedAuthFailure:
++			finalPolicy = ClientBYOKPolicy.Allow;
++			break;
++	}
++
++	return { policySourceState, livePolicy, cachedEnterprisePolicy, finalPolicy };
++}
++
++export function isClientBYOKAllowed(evaluation: ClientBYOKPolicyEvaluation): boolean {
++	return evaluation.finalPolicy === ClientBYOKPolicy.Allow;
+ }
+ 
+ /**
+diff --git a/extensions/copilot/src/extension/byok/common/test/byokProvider.spec.ts b/extensions/copilot/src/extension/byok/common/test/byokProvider.spec.ts
+index cd34a9381644d9c2b3a8e1898e4bf9a0237090cb..9b69d7a8e58b552600a3a1181caf4560a5351e05 100644
+--- a/extensions/copilot/src/extension/byok/common/test/byokProvider.spec.ts
++++ b/extensions/copilot/src/extension/byok/common/test/byokProvider.spec.ts
+@@ -5,7 +5,7 @@
+ 
+ import { describe, expect, it } from 'vitest';
+ import { CopilotToken } from '../../../../platform/authentication/common/copilotToken';
+-import { byokKnownModelToAPIInfo, BYOKModelCapabilities, isClientBYOKAllowed, resolveModelInfo, resolveModelTokenLimits } from '../byokProvider';
++import { byokKnownModelToAPIInfo, BYOKModelCapabilities, ClientBYOKPolicySourceState, ClientBYOKPolicy, evaluateClientBYOKPolicy, getClientBYOKPolicySourceStateFromToken, getClientBYOKPolicyFromToken, isClientBYOKAllowed, resolveModelInfo, resolveModelTokenLimits } from '../byokProvider';
+ 
+ describe('byokKnownModelToAPIInfo', () => {
+ 	const baseCapabilities: BYOKModelCapabilities = {
+@@ -170,7 +170,7 @@ describe('resolveModelTokenLimits', () => {
+ 	});
+ });
+ 
+-describe('isClientBYOKAllowed', () => {
++describe('client BYOK policy evaluation', () => {
+ 	function mockToken(props: { isInternal?: boolean; isIndividual?: boolean; isClientBYOKEnabled?: boolean }): Omit<CopilotToken, 'token'> {
+ 		return {
+ 			isInternal: props.isInternal ?? false,
+@@ -179,27 +179,98 @@ describe('isClientBYOKAllowed', () => {
+ 		} as unknown as Omit<CopilotToken, 'token'>;
+ 	}
+ 
+-	it('allows BYOK when there is no GitHub session (truly signed-out)', () => {
+-		expect(isClientBYOKAllowed(false, undefined)).toBe(true);
++	it.each([
++		{ token: mockToken({ isInternal: true }), policySourceState: ClientBYOKPolicySourceState.Internal, policy: ClientBYOKPolicy.Allow },
++		{ token: mockToken({ isIndividual: true }), policySourceState: ClientBYOKPolicySourceState.Individual, policy: ClientBYOKPolicy.Allow },
++		{ token: mockToken({ isClientBYOKEnabled: true }), policySourceState: ClientBYOKPolicySourceState.Managed, policy: ClientBYOKPolicy.Allow },
++		{ token: mockToken({}), policySourceState: ClientBYOKPolicySourceState.Managed, policy: ClientBYOKPolicy.Deny },
++	])('classifies Copilot token policy for $policySourceState / $policy', ({ token, policySourceState, policy }) => {
++		expect(getClientBYOKPolicySourceStateFromToken(token)).toBe(policySourceState);
++		expect(getClientBYOKPolicyFromToken(token)).toBe(policy);
+ 	});
+ 
+-	it('denies BYOK when signed-in but the Copilot token is unavailable (e.g. EnterpriseManagedError)', () => {
+-		expect(isClientBYOKAllowed(true, undefined)).toBe(false);
+-	});
+-
+-	it('allows BYOK for internal users', () => {
+-		expect(isClientBYOKAllowed(true, mockToken({ isInternal: true }))).toBe(true);
+-	});
+-
+-	it('allows BYOK for individual users', () => {
+-		expect(isClientBYOKAllowed(true, mockToken({ isIndividual: true }))).toBe(true);
+-	});
+-
+-	it('allows BYOK when the token explicitly enables it (e.g. enterprise org opt-in)', () => {
+-		expect(isClientBYOKAllowed(true, mockToken({ isClientBYOKEnabled: true }))).toBe(true);
+-	});
+-
+-	it('denies BYOK for signed-in managed users when no policy flag is set', () => {
+-		expect(isClientBYOKAllowed(true, mockToken({}))).toBe(false);
++	it.each([
++		{
++			scenario: 'signed out of GitHub',
++			why: 'BYOK is local/user-owned and does not require GitHub auth',
++			policySourceState: ClientBYOKPolicySourceState.SignedOut,
++			livePolicy: ClientBYOKPolicy.Unknown,
++			cachedPolicy: undefined,
++			expectedPolicy: ClientBYOKPolicy.Allow,
++		},
++		{
++			scenario: 'signed in without Copilot entitlement',
++			why: 'BYOK should not require a paid Copilot seat',
++			policySourceState: ClientBYOKPolicySourceState.NoCopilotEntitlement,
++			livePolicy: ClientBYOKPolicy.Allow,
++			cachedPolicy: undefined,
++			expectedPolicy: ClientBYOKPolicy.Allow,
++		},
++		{
++			scenario: 'Copilot subscription expired',
++			why: 'BYOK endpoints remain independent even when Copilot access has lapsed',
++			policySourceState: ClientBYOKPolicySourceState.SubscriptionExpired,
++			livePolicy: ClientBYOKPolicy.Allow,
++			cachedPolicy: undefined,
++			expectedPolicy: ClientBYOKPolicy.Allow,
++		},
++		{
++			scenario: 'managed account with live BYOK allow policy',
++			why: 'live enterprise policy takes precedence over stale cached policy',
++			policySourceState: ClientBYOKPolicySourceState.Managed,
++			livePolicy: ClientBYOKPolicy.Allow,
++			cachedPolicy: ClientBYOKPolicy.Deny,
++			expectedPolicy: ClientBYOKPolicy.Allow,
++		},
++		{
++			scenario: 'managed account with live BYOK deny policy',
++			why: 'explicit enterprise policy must be respected',
++			policySourceState: ClientBYOKPolicySourceState.Managed,
++			livePolicy: ClientBYOKPolicy.Deny,
++			cachedPolicy: ClientBYOKPolicy.Allow,
++			expectedPolicy: ClientBYOKPolicy.Deny,
++		},
++		{
++			scenario: 'managed policy unavailable with cached allow policy',
++			why: 'air-gapped enterprise users should retain last known allowed BYOK policy',
++			policySourceState: ClientBYOKPolicySourceState.ManagedPolicyUnavailable,
++			livePolicy: ClientBYOKPolicy.Unknown,
++			cachedPolicy: ClientBYOKPolicy.Allow,
++			expectedPolicy: ClientBYOKPolicy.Allow,
++		},
++		{
++			scenario: 'managed policy unavailable with cached deny policy',
++			why: 'air-gapped enterprise users should retain last known denied BYOK policy',
++			policySourceState: ClientBYOKPolicySourceState.ManagedPolicyUnavailable,
++			livePolicy: ClientBYOKPolicy.Unknown,
++			cachedPolicy: ClientBYOKPolicy.Deny,
++			expectedPolicy: ClientBYOKPolicy.Deny,
++		},
++		{
++			scenario: 'managed policy unavailable with no cached policy',
++			why: 'enterprise policy enforcement should fail closed when policy is unknown',
++			policySourceState: ClientBYOKPolicySourceState.ManagedPolicyUnavailable,
++			livePolicy: ClientBYOKPolicy.Unknown,
++			cachedPolicy: undefined,
++			expectedPolicy: ClientBYOKPolicy.Deny,
++		},
++		{
++			scenario: 'unclassified auth failure without enterprise policy signal',
++			why: 'do not block BYOK for ordinary users solely because Copilot auth failed',
++			policySourceState: ClientBYOKPolicySourceState.UnclassifiedAuthFailure,
++			livePolicy: ClientBYOKPolicy.Unknown,
++			cachedPolicy: undefined,
++			expectedPolicy: ClientBYOKPolicy.Allow,
++		},
++	])('$scenario: $why', ({ policySourceState, livePolicy, cachedPolicy, expectedPolicy }) => {
++		const evaluation = evaluateClientBYOKPolicy(policySourceState, livePolicy, cachedPolicy);
++
++		expect(evaluation).toEqual({
++			policySourceState,
++			livePolicy,
++			cachedEnterprisePolicy: cachedPolicy,
++			finalPolicy: expectedPolicy,
++		});
++		expect(isClientBYOKAllowed(evaluation)).toBe(expectedPolicy === ClientBYOKPolicy.Allow);
+ 	});
+ });
+diff --git a/extensions/copilot/src/extension/byok/vscode-node/byokContribution.ts b/extensions/copilot/src/extension/byok/vscode-node/byokContribution.ts
+index a0d088952246da3d6fe977dd1981a46ac222f4fc..63c2c1120a424ecc6263491fa603bcd5cf29620a 100644
+--- a/extensions/copilot/src/extension/byok/vscode-node/byokContribution.ts
++++ b/extensions/copilot/src/extension/byok/vscode-node/byokContribution.ts
+@@ -14,6 +14,7 @@ import { IExtensionContribution } from '../../common/contributions';
+ import { AbstractLanguageModelChatProvider } from './abstractLanguageModelChatProvider';
+ import { AnthropicLMProvider } from './anthropicProvider';
+ import { AzureBYOKModelProvider } from './azureProvider';
++import { resolveClientBYOKPolicyEvaluation } from './byokPolicy';
+ import { BYOKStorageService, IBYOKStorageService } from './byokStorageService';
+ import { CustomEndpointBYOKModelProvider } from './customEndpointProvider';
+ import { CustomOAIBYOKModelProvider } from './customOAIProvider';
+@@ -30,19 +31,21 @@ export class BYOKContrib extends Disposable implements IExtensionContribution {
+ 	private readonly _providerRegistrations = this._register(new DisposableStore());
+ 	private _providersRegistered = false;
+ 	private _knownModelsRefreshed = false;
++	private _policyApplyGeneration = 0;
+ 	private _knownModelsRefreshTargets: ReadonlyArray<readonly [string, AbstractLanguageModelChatProvider]> = [];
+ 
+ 	constructor(
+ 		@IFetcherService private readonly _fetcherService: IFetcherService,
+ 		@ILogService private readonly _logService: ILogService,
+-		@IVSCodeExtensionContext extensionContext: IVSCodeExtensionContext,
++		@IVSCodeExtensionContext private readonly _extensionContext: IVSCodeExtensionContext,
+ 		@IAuthenticationService private readonly _authService: IAuthenticationService,
+ 		@IInstantiationService private readonly _instantiationService: IInstantiationService,
+ 	) {
+ 		super();
+-		this._byokStorageService = new BYOKStorageService(extensionContext);
+-		this._applyPolicy();
+-		this._register(this._authService.onDidAuthenticationChange(() => this._applyPolicy()));
++		this._byokStorageService = new BYOKStorageService(this._extensionContext);
++		void this._applyPolicy();
++		this._register(this._authService.onDidAuthenticationChange(() => void this._applyPolicy()));
++		this._register(this._authService.onDidCopilotTokenChange(() => void this._applyPolicy()));
+ 	}
+ 
+ 	private _buildProviders(): void {
+@@ -71,8 +74,13 @@ export class BYOKContrib extends Disposable implements IExtensionContribution {
+ 		];
+ 	}
+ 
+-	private _applyPolicy(): void {
+-		const allowed = isClientBYOKAllowed(!!this._authService.anyGitHubSession, this._authService.copilotToken);
++	private async _applyPolicy(): Promise<void> {
++		const generation = ++this._policyApplyGeneration;
++		const evaluation = await resolveClientBYOKPolicyEvaluation(this._authService, this._extensionContext);
++		if (generation !== this._policyApplyGeneration || this._store.isDisposed) {
++			return;
++		}
++		const allowed = isClientBYOKAllowed(evaluation);
+ 		if (allowed && !this._providersRegistered) {
+ 			if (this._providers.size === 0) {
+ 				this._buildProviders();
+diff --git a/extensions/copilot/src/extension/byok/vscode-node/byokPolicy.ts b/extensions/copilot/src/extension/byok/vscode-node/byokPolicy.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..4b7fbb9c5e5ec5d6e77fee82005f4eea407b6878
+--- /dev/null
++++ b/extensions/copilot/src/extension/byok/vscode-node/byokPolicy.ts
+@@ -0,0 +1,66 @@
++/*---------------------------------------------------------------------------------------------
++ *  Copyright (c) Microsoft Corporation. All rights reserved.
++ *  Licensed under the MIT License. See License.txt in the project root for license information.
++ *--------------------------------------------------------------------------------------------*/
++
++import { IAuthenticationService } from '../../../platform/authentication/common/authentication';
++import { EnterpriseManagedError, NotSignedUpError, SubscriptionExpiredError } from '../../../platform/authentication/vscode-node/copilotTokenManager';
++import { IVSCodeExtensionContext } from '../../../platform/extContext/common/extensionContext';
++import { ClientBYOKPolicySourceState, ClientBYOKPolicy, ClientBYOKPolicyEvaluation, evaluateClientBYOKPolicy, getClientBYOKPolicySourceStateFromToken, getClientBYOKPolicyFromToken } from '../common/byokProvider';
++
++const clientBYOKEnterprisePolicyCachePrefix = 'copilot-byok-enterprise-policy';
++
++function getClientBYOKEnterprisePolicyCacheKey(authService: IAuthenticationService): string | undefined {
++	const accountId = authService.anyGitHubSession?.account.id;
++	return accountId ? `${clientBYOKEnterprisePolicyCachePrefix}-${accountId}` : undefined;
++}
++
++function getCachedClientBYOKEnterprisePolicy(authService: IAuthenticationService, extensionContext?: IVSCodeExtensionContext): ClientBYOKPolicy | undefined {
++	const key = getClientBYOKEnterprisePolicyCacheKey(authService);
++	if (!key || !extensionContext) {
++		return undefined;
++	}
++	return extensionContext.globalState.get<ClientBYOKPolicy>(key);
++}
++
++async function updateCachedClientBYOKEnterprisePolicy(authService: IAuthenticationService, extensionContext: IVSCodeExtensionContext | undefined, policy: ClientBYOKPolicy): Promise<void> {
++	const key = getClientBYOKEnterprisePolicyCacheKey(authService);
++	if (!key || !extensionContext) {
++		return;
++	}
++	await extensionContext.globalState.update(key, policy);
++}
++
++export async function resolveClientBYOKPolicyEvaluation(
++	authService: IAuthenticationService,
++	extensionContext?: IVSCodeExtensionContext
++): Promise<ClientBYOKPolicyEvaluation> {
++	const cachedEnterprisePolicy = getCachedClientBYOKEnterprisePolicy(authService, extensionContext);
++	if (!authService.anyGitHubSession) {
++		return evaluateClientBYOKPolicy(ClientBYOKPolicySourceState.SignedOut, ClientBYOKPolicy.Unknown, cachedEnterprisePolicy);
++	}
++
++	try {
++		const copilotToken = await authService.getCopilotToken();
++		const policySourceState = getClientBYOKPolicySourceStateFromToken(copilotToken);
++		const livePolicy = getClientBYOKPolicyFromToken(copilotToken);
++		if (policySourceState === ClientBYOKPolicySourceState.Managed) {
++			await updateCachedClientBYOKEnterprisePolicy(authService, extensionContext, livePolicy).catch(() => undefined);
++		}
++		return evaluateClientBYOKPolicy(policySourceState, livePolicy, cachedEnterprisePolicy);
++	} catch (error) {
++		if (error instanceof NotSignedUpError) {
++			return evaluateClientBYOKPolicy(ClientBYOKPolicySourceState.NoCopilotEntitlement, ClientBYOKPolicy.Allow, cachedEnterprisePolicy);
++		}
++		if (error instanceof SubscriptionExpiredError) {
++			return evaluateClientBYOKPolicy(ClientBYOKPolicySourceState.SubscriptionExpired, ClientBYOKPolicy.Allow, cachedEnterprisePolicy);
++		}
++		if (error instanceof EnterpriseManagedError) {
++			return evaluateClientBYOKPolicy(ClientBYOKPolicySourceState.Managed, ClientBYOKPolicy.Deny, cachedEnterprisePolicy);
++		}
++		if (cachedEnterprisePolicy) {
++			return evaluateClientBYOKPolicy(ClientBYOKPolicySourceState.ManagedPolicyUnavailable, ClientBYOKPolicy.Unknown, cachedEnterprisePolicy);
++		}
++		return evaluateClientBYOKPolicy(ClientBYOKPolicySourceState.UnclassifiedAuthFailure);
++	}
++}
+diff --git a/extensions/copilot/src/extension/byok/vscode-node/test/byokPolicy.spec.ts b/extensions/copilot/src/extension/byok/vscode-node/test/byokPolicy.spec.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..89b378b19fcda9be7ba35849e3e64d5fac08f700
+--- /dev/null
++++ b/extensions/copilot/src/extension/byok/vscode-node/test/byokPolicy.spec.ts
+@@ -0,0 +1,168 @@
++/*---------------------------------------------------------------------------------------------
++ *  Copyright (c) Microsoft Corporation. All rights reserved.
++ *  Licensed under the MIT License. See License.txt in the project root for license information.
++ *--------------------------------------------------------------------------------------------*/
++
++import { describe, expect, it, vi } from 'vitest';
++import { IAuthenticationService } from '../../../../platform/authentication/common/authentication';
++import { CopilotToken } from '../../../../platform/authentication/common/copilotToken';
++import { EnterpriseManagedError, NotSignedUpError, SubscriptionExpiredError } from '../../../../platform/authentication/vscode-node/copilotTokenManager';
++import { IVSCodeExtensionContext } from '../../../../platform/extContext/common/extensionContext';
++import { ClientBYOKPolicySourceState, ClientBYOKPolicy } from '../../common/byokProvider';
++import { resolveClientBYOKPolicyEvaluation } from '../byokPolicy';
++
++function mockToken(props: { isInternal?: boolean; isIndividual?: boolean; isClientBYOKEnabled?: boolean }): CopilotToken {
++	return {
++		isInternal: props.isInternal ?? false,
++		isIndividual: props.isIndividual ?? false,
++		isClientBYOKEnabled: () => props.isClientBYOKEnabled ?? false,
++	} as unknown as CopilotToken;
++}
++
++function createAuthService(options: { signedIn?: boolean; token?: CopilotToken; error?: Error }): IAuthenticationService {
++	return {
++		anyGitHubSession: options.signedIn === false ? undefined : {
++			account: { id: 'acct-1', label: 'test-user' },
++			accessToken: 'gh-token',
++			id: 'session-1',
++			scopes: [],
++		},
++		getCopilotToken: vi.fn(async () => {
++			if (options.error) {
++				throw options.error;
++			}
++			return options.token ?? mockToken({});
++		}),
++	} as unknown as IAuthenticationService;
++}
++
++function createExtensionContext(initialPolicy?: ClientBYOKPolicy): IVSCodeExtensionContext {
++	const state = new Map<string, unknown>();
++	if (initialPolicy) {
++		state.set('copilot-byok-enterprise-policy-acct-1', initialPolicy);
++	}
++	return {
++		globalState: {
++			get: vi.fn((key: string, defaultValue?: unknown) => state.has(key) ? state.get(key) : defaultValue),
++			update: vi.fn(async (key: string, value: unknown) => {
++				state.set(key, value);
++			}),
++		},
++	} as unknown as IVSCodeExtensionContext;
++}
++
++function createFailingCacheExtensionContext(): IVSCodeExtensionContext {
++	return {
++		globalState: {
++			get: vi.fn(() => undefined),
++			update: vi.fn(async () => {
++				throw new Error('cache unavailable');
++			}),
++		},
++	} as unknown as IVSCodeExtensionContext;
++}
++
++describe('resolveClientBYOKPolicyEvaluation', () => {
++	it('allows signed-out users without resolving a Copilot token', async () => {
++		const authService = createAuthService({ signedIn: false });
++
++		const evaluation = await resolveClientBYOKPolicyEvaluation(authService, createExtensionContext());
++
++		expect(authService.getCopilotToken).not.toHaveBeenCalled();
++		expect(evaluation.policySourceState).toBe(ClientBYOKPolicySourceState.SignedOut);
++		expect(evaluation.finalPolicy).toBe(ClientBYOKPolicy.Allow);
++	});
++
++	it.each([
++		{
++			name: 'signed-in users without Copilot entitlement',
++			error: new NotSignedUpError('not signed up'),
++			policySourceState: ClientBYOKPolicySourceState.NoCopilotEntitlement,
++		},
++		{
++			name: 'signed-in users whose Copilot subscription expired',
++			error: new SubscriptionExpiredError('subscription expired'),
++			policySourceState: ClientBYOKPolicySourceState.SubscriptionExpired,
++		},
++	])('allows $name', async ({ error, policySourceState }) => {
++		const authService = createAuthService({ error });
++
++		const evaluation = await resolveClientBYOKPolicyEvaluation(authService, createExtensionContext());
++
++		expect(evaluation.policySourceState).toBe(policySourceState);
++		expect(evaluation.finalPolicy).toBe(ClientBYOKPolicy.Allow);
++	});
++
++	it('denies explicit enterprise-managed auth failures', async () => {
++		const authService = createAuthService({ error: new EnterpriseManagedError('enterprise managed') });
++
++		const evaluation = await resolveClientBYOKPolicyEvaluation(authService, createExtensionContext(ClientBYOKPolicy.Allow));
++
++		expect(evaluation.policySourceState).toBe(ClientBYOKPolicySourceState.Managed);
++		expect(evaluation.livePolicy).toBe(ClientBYOKPolicy.Deny);
++		expect(evaluation.finalPolicy).toBe(ClientBYOKPolicy.Deny);
++	});
++
++	it.each([
++		{
++			name: 'allows',
++			token: mockToken({ isClientBYOKEnabled: true }),
++			expectedPolicy: ClientBYOKPolicy.Allow,
++		},
++		{
++			name: 'denies',
++			token: mockToken({}),
++			expectedPolicy: ClientBYOKPolicy.Deny,
++		},
++	])('$name managed users from live token policy and caches it', async ({ token, expectedPolicy }) => {
++		const authService = createAuthService({ token });
++		const extensionContext = createExtensionContext();
++
++		const evaluation = await resolveClientBYOKPolicyEvaluation(authService, extensionContext);
++
++		expect(evaluation.policySourceState).toBe(ClientBYOKPolicySourceState.Managed);
++		expect(evaluation.livePolicy).toBe(expectedPolicy);
++		expect(evaluation.finalPolicy).toBe(expectedPolicy);
++		expect(extensionContext.globalState.update).toHaveBeenCalledWith('copilot-byok-enterprise-policy-acct-1', expectedPolicy);
++	});
++
++	it('keeps the live policy decision if caching the managed policy fails', async () => {
++		const authService = createAuthService({ token: mockToken({ isClientBYOKEnabled: true }) });
++
++		const evaluation = await resolveClientBYOKPolicyEvaluation(authService, createFailingCacheExtensionContext());
++
++		expect(evaluation.policySourceState).toBe(ClientBYOKPolicySourceState.Managed);
++		expect(evaluation.livePolicy).toBe(ClientBYOKPolicy.Allow);
++		expect(evaluation.finalPolicy).toBe(ClientBYOKPolicy.Allow);
++	});
++
++	it.each([
++		{
++			name: 'allows when cached policy allows',
++			cachedPolicy: ClientBYOKPolicy.Allow,
++			expectedPolicy: ClientBYOKPolicy.Allow,
++		},
++		{
++			name: 'denies when cached policy denies',
++			cachedPolicy: ClientBYOKPolicy.Deny,
++			expectedPolicy: ClientBYOKPolicy.Deny,
++		},
++	])('$name after enterprise policy becomes unavailable', async ({ cachedPolicy, expectedPolicy }) => {
++		const authService = createAuthService({ error: new Error('network unavailable') });
++
++		const evaluation = await resolveClientBYOKPolicyEvaluation(authService, createExtensionContext(cachedPolicy));
++
++		expect(evaluation.policySourceState).toBe(ClientBYOKPolicySourceState.ManagedPolicyUnavailable);
++		expect(evaluation.cachedEnterprisePolicy).toBe(cachedPolicy);
++		expect(evaluation.finalPolicy).toBe(expectedPolicy);
++	});
++
++	it('allows unclassified auth failures when there is no enterprise policy signal', async () => {
++		const authService = createAuthService({ error: new Error('network unavailable') });
++
++		const evaluation = await resolveClientBYOKPolicyEvaluation(authService, createExtensionContext());
++
++		expect(evaluation.policySourceState).toBe(ClientBYOKPolicySourceState.UnclassifiedAuthFailure);
++		expect(evaluation.finalPolicy).toBe(ClientBYOKPolicy.Allow);
++	});
++});
+diff --git a/extensions/copilot/src/extension/contextKeys/vscode-node/contextKeys.contribution.ts b/extensions/copilot/src/extension/contextKeys/vscode-node/contextKeys.contribution.ts
+index 7920bba23b0be394c6dbd8dde5908bf242b2d9aa..019de24359d1ef14eea64daa8d4a934df4216444 100644
+--- a/extensions/copilot/src/extension/contextKeys/vscode-node/contextKeys.contribution.ts
++++ b/extensions/copilot/src/extension/contextKeys/vscode-node/contextKeys.contribution.ts
+@@ -8,6 +8,7 @@ import { TokenErrorReason } from '../../../platform/authentication/common/copilo
+ import { ContactSupportError, EnterpriseManagedError, GitHubLoginFailedError, InvalidTokenError, NotSignedUpError, RateLimitedError, SubscriptionExpiredError } from '../../../platform/authentication/vscode-node/copilotTokenManager';
+ import { SESSION_LOGIN_MESSAGE } from '../../../platform/authentication/vscode-node/session';
+ import { ConfigKey, IConfigurationService } from '../../../platform/configuration/common/configurationService';
++import { IVSCodeExtensionContext } from '../../../platform/extContext/common/extensionContext';
+ import { IExperimentationService } from '../../../platform/telemetry/common/nullExperimentationService';
+ import { IEnvService } from '../../../platform/env/common/envService';
+ import { ILogService } from '../../../platform/log/common/logService';
+@@ -17,6 +18,7 @@ import { Disposable } from '../../../util/vs/base/common/lifecycle';
+ import { autorun } from '../../../util/vs/base/common/observableInternal';
+ import { GHPR_EXTENSION_ID } from '../../chatSessions/vscode/chatSessionsUriHandler';
+ import { isClientBYOKAllowed } from '../../byok/common/byokProvider';
++import { resolveClientBYOKPolicyEvaluation } from '../../byok/vscode-node/byokPolicy';
+ import { EXTENSION_ID } from '../../common/constants';
+ 
+ const welcomeViewContextKeys = {
+@@ -60,6 +62,7 @@ export class ContextKeysContribution extends Disposable {
+ 		@IAuthenticationService private readonly _authenticationService: IAuthenticationService,
+ 		@ITelemetryService private readonly _telemetryService: ITelemetryService,
+ 		@ILogService private readonly _logService: ILogService,
++		@IVSCodeExtensionContext private readonly _extensionContext: IVSCodeExtensionContext,
+ 		@IConfigurationService private readonly _configService: IConfigurationService,
+ 		@IEnvService private readonly _envService: IEnvService,
+ 		@IExperimentationService private readonly _expService: IExperimentationService
+@@ -224,13 +227,8 @@ export class ContextKeysContribution extends Disposable {
+ 	}
+ 
+ 	private async _updateClientByokEnabledContext() {
+-		const hasGitHubSession = !!this._authenticationService.anyGitHubSession;
+-		try {
+-			const copilotToken = await this._authenticationService.getCopilotToken();
+-			commands.executeCommand('setContext', clientByokEnabledContextKey, isClientBYOKAllowed(hasGitHubSession, copilotToken));
+-		} catch (e) {
+-			commands.executeCommand('setContext', clientByokEnabledContextKey, isClientBYOKAllowed(hasGitHubSession, undefined));
+-		}
++		const evaluation = await resolveClientBYOKPolicyEvaluation(this._authenticationService, this._extensionContext);
++		commands.executeCommand('setContext', clientByokEnabledContextKey, isClientBYOKAllowed(evaluation));
+ 	}
+ 
+ 	private _updateShowLogViewContext() {

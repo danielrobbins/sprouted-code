@@ -1,0 +1,59 @@
+diff --git a/product.json b/product.json
+--- a/product.json
++++ b/product.json
+@@ -42,7 +42,8 @@
+ 		"publisherUrl": "https://marketplace.visualstudio.com/publishers",
+ 		"resourceUrlTemplate": "https://{publisher}.vscode-unpkg.net/{publisher}/{name}/{version}/{path}",
+ 		"extensionUrlTemplate": "https://www.vscode-unpkg.net/_gallery/{publisher}/{name}/latest",
+-		"controlUrl": "https://main.vscode-cdn.net/extensions/marketplace.json"
++		"controlUrl": "https://main.vscode-cdn.net/extensions/marketplace.json",
++		"verifySignature": false
+ 	},
+ 	"builtInExtensions": [
+ 		{
+diff --git a/src/vs/base/common/product.ts b/src/vs/base/common/product.ts
+--- a/src/vs/base/common/product.ts
++++ b/src/vs/base/common/product.ts
+@@ -136,6 +136,7 @@ export interface IProductConfiguration {
+ 		readonly resourceUrlTemplate: string;
+ 		readonly nlsBaseUrl: string;
+ 		readonly accessSKUs?: string[];
++		readonly verifySignature?: boolean;
+ 	};
+ 
+ 	readonly agentSdks?: { readonly [packageId: string]: IAgentSdkProductConfig };
+diff --git a/src/vs/platform/extensionManagement/node/extensionManagementService.ts b/src/vs/platform/extensionManagement/node/extensionManagementService.ts
+--- a/src/vs/platform/extensionManagement/node/extensionManagementService.ts
++++ b/src/vs/platform/extensionManagement/node/extensionManagementService.ts
+@@ -90,7 +90,7 @@ export class ExtensionManagementService extends AbstractExtensionManagementServ
+ 		@IFileService private readonly fileService: IFileService,
+ 		@IConfigurationService private readonly configurationService: IConfigurationService,
+ 		@IExtensionGalleryManifestService protected readonly extensionGalleryManifestService: IExtensionGalleryManifestService,
+-		@IProductService productService: IProductService,
++		@IProductService private readonly productService: IProductService,
+ 		@IAllowedExtensionsService allowedExtensionsService: IAllowedExtensionsService,
+ 		@IUriIdentityService uriIdentityService: IUriIdentityService,
+ 		@IUserDataProfilesService userDataProfilesService: IUserDataProfilesService
+@@ -340,7 +340,9 @@ export class ExtensionManagementService extends AbstractExtensionManagementServ
+ 	private async downloadExtension(extension: IGalleryExtension, operation: InstallOperation, verifySignature: boolean, clientTargetPlatform?: TargetPlatform): Promise<{ readonly location: URI; readonly verificationStatus: ExtensionSignatureVerificationCode | undefined }> {
+ 		if (verifySignature) {
+ 			const value = this.configurationService.getValue(VerifyExtensionSignatureConfigKey);
+-			verifySignature = isBoolean(value) ? value : true;
++			verifySignature = isBoolean(value)
++				? value
++				: (this.productService.extensionsGallery?.verifySignature ?? true);
+ 		}
+ 		const { location, verificationStatus } = await this.extensionsDownloader.download(extension, operation, verifySignature, clientTargetPlatform);
+ 		const shouldRequireSignature = shouldRequireRepositorySignatureFor(extension.private, await this.extensionGalleryManifestService.getExtensionGalleryManifest());
+diff --git a/src/vs/workbench/contrib/extensions/browser/extensions.contribution.ts b/src/vs/workbench/contrib/extensions/browser/extensions.contribution.ts
+--- a/src/vs/workbench/contrib/extensions/browser/extensions.contribution.ts
++++ b/src/vs/workbench/contrib/extensions/browser/extensions.contribution.ts
+@@ -329,7 +329,7 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).regi
+ 			[VerifyExtensionSignatureConfigKey]: {
+ 				type: 'boolean',
+ 				description: localize('extensions.verifySignature', "When enabled, extensions are verified to be signed before getting installed."),
+-				default: true,
++				default: product.extensionsGallery?.verifySignature ?? true,
+ 				scope: ConfigurationScope.APPLICATION,
+ 				included: isNative
+ 			},

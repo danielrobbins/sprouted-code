@@ -1,0 +1,218 @@
+{
+  "release": "2026.07.0",
+  "base": {
+    "repo": "microsoft/vscode",
+    "commit": "50bd213156938007b0e13fa3d0551d87f22d6a8b",
+    "branch": "main"
+  },
+  "build": {
+    "flavor": "release",
+    "ci": true,
+    "dependency_install": "npm ci",
+    "source_tree": "6acf02872b3a1c97a407e0df85179272d3506580",
+    "provenance_receipt": true
+  },
+  "product": {
+    "extension_gallery": {
+      "enabled": true,
+      "patch": "patches/0008-enable-microsoft-extension-marketplace.patch",
+      "verify_signatures": false,
+      "signature_policy_patch": "patches/0009-configure-extension-signature-verification.patch"
+    }
+  },
+  "patches": [
+    {
+      "name": "BYOK without Copilot entitlement",
+      "source_repo": "microsoft/vscode",
+      "source_ref": "patches/0000-allow-byok-without-copilot-entitlement.patch",
+      "source_commit": "676bb2227ac6885797abc2ae0d6a23d627ac3cc2",
+      "upstream_issue": "https://github.com/microsoft/vscode/issues/324310",
+      "upstream_pr": "https://github.com/microsoft/vscode/pull/324311",
+      "status": "pending-upstream-review",
+      "reason": "Allow independently configured BYOK custom endpoints when signed into GitHub without a Copilot entitlement."
+    },
+    {
+      "name": "Keep built-in chat extension enabled for BYOK setup",
+      "source_repo": "danielrobbins/sprouted-code",
+      "source_ref": "patches/0001-keep-builtin-chat-extension-enabled-for-byok-builds.patch",
+      "source_commit": "",
+      "upstream_issue": "",
+      "upstream_pr": "",
+      "status": "sprouted-only",
+      "reason": "Prevent fresh profiles built from the upstream Visual Studio Code source from disabling the bundled GitHub.copilot-chat extension before the BYOK endpoint-management UI can be used."
+    },
+    {
+      "name": "Preserve Copilot SDK entrypoint for source builds",
+      "source_repo": "danielrobbins/sprouted-code",
+      "source_ref": "patches/0002-preserve-copilot-sdk-entrypoint-for-source-builds.patch",
+      "source_commit": "",
+      "upstream_issue": "",
+      "upstream_pr": "",
+      "status": "sprouted-only",
+      "reason": "Keep @github/copilot/sdk/index.js in the packaged extension so the bundled Copilot Chat extension can activate in local source builds."
+    },
+    {
+      "name": "Keep BYOK model management reachable during setup",
+      "source_repo": "danielrobbins/sprouted-code",
+      "source_ref": "patches/0003-keep-byok-model-management-reachable-during-setup.patch",
+      "source_commit": "",
+      "upstream_issue": "",
+      "upstream_pr": "",
+      "status": "sprouted-only",
+      "reason": "Expose Manage Models even while Copilot setup is required, so first-run BYOK users have a path to add custom endpoints."
+    },
+    {
+      "name": "Identify build as Sprouted Code",
+      "source_repo": "danielrobbins/sprouted-code",
+      "source_ref": "patches/0004-identify-build-as-sprouted-code.patch",
+      "source_commit": "",
+      "upstream_issue": "",
+      "upstream_pr": "",
+      "status": "sprouted-only",
+      "reason": "Apply minimal product identity fields so the build presents itself as Sprouted Code while remaining close to the upstream Visual Studio Code source."
+    },
+    {
+      "name": "Use product name in welcome onboarding",
+      "source_repo": "danielrobbins/sprouted-code",
+      "source_ref": "patches/0005-use-product-name-in-welcome-onboarding.patch",
+      "source_commit": "",
+      "upstream_issue": "",
+      "upstream_pr": "",
+      "status": "sprouted-only",
+      "reason": "Make the first-launch onboarding welcome title follow product.json, so Sprouted Code does not greet users as VS Code."
+    },
+    {
+      "name": "Only patch Windows PE dependencies",
+      "source_repo": "danielrobbins/sprouted-code",
+      "source_ref": "patches/0006-only-patch-windows-pe-dependencies.patch",
+      "source_commit": "",
+      "upstream_issue": "",
+      "upstream_pr": "",
+      "status": "pending-upstream-submission",
+      "reason": "Prevent Windows source packaging from passing bundled Linux and macOS native modules to signtool and rcedit."
+    },
+    {
+      "name": "Use a cross-platform build test glob",
+      "source_repo": "danielrobbins/sprouted-code",
+      "source_ref": "patches/0007-use-cross-platform-build-test-glob.patch",
+      "source_commit": "",
+      "upstream_issue": "",
+      "upstream_pr": "",
+      "status": "pending-upstream-submission",
+      "reason": "Allow the build package test command to discover its Node test files on Windows as well as POSIX shells."
+    },
+    {
+      "name": "Enable the Microsoft extension marketplace",
+      "source_repo": "danielrobbins/sprouted-code",
+      "source_ref": "patches/0008-enable-microsoft-extension-marketplace.patch",
+      "source_commit": "",
+      "upstream_issue": "",
+      "upstream_pr": "",
+      "status": "sprouted-only",
+      "reason": "Allow public test builds to exercise compatibility with extensions distributed through the Microsoft marketplace."
+    },
+    {
+      "name": "Make extension signature verification product-configurable",
+      "source_repo": "danielrobbins/sprouted-code",
+      "source_ref": "patches/0009-configure-extension-signature-verification.patch",
+      "source_commit": "",
+      "upstream_issue": "",
+      "upstream_pr": "",
+      "status": "pending-upstream-submission",
+      "reason": "Let source-built products explicitly disable unavailable Microsoft signature verification while preserving the upstream default."
+    }
+  ],
+  "builds": [
+    {
+      "platform": "win32-arm64",
+      "builder": "python-windows-local",
+      "product_commit": "e50fa96741e6968557d4a77c70992382449425e7",
+      "artifact": "sprouted-code-2026.07.0-win32-arm64.zip",
+      "sha256": "b1c8c204321449de5d09a5b5be7a2733717e407fa37c26d322fc155da397d801",
+      "tests": [
+        "Python build tooling: 85 passed, 1 Windows symlink-privilege skip",
+        "npm ci: pass",
+        "focused BYOK Vitest suites: pass",
+        "CI=1 npm run gulp -- vscode-win32-arm64-min: pass",
+        "archive CRC and independent SHA-256 verification: pass",
+        "embedded provenance receipt matches release, source tree, flavor, platform, and architecture: pass",
+        "static artifact identity, gallery policy, bundled Copilot extension, and SDK entrypoint: pass",
+        "packaged CLI --version reports 1.130.0 and arm64: pass"
+      ]
+    },
+    {
+      "platform": "win32-x64",
+      "builder": "python-windows-local",
+      "product_commit": "e50fa96741e6968557d4a77c70992382449425e7",
+      "artifact": "sprouted-code-2026.07.0-win32-x64.zip",
+      "sha256": "9d4ec5ad4e29b69a0b7092b7deae95fb40c6253cd34225bfeebe65d2782a3703",
+      "tests": [
+        "Python build tooling: 85 passed, 1 Windows symlink-privilege skip",
+        "npm ci: pass",
+        "focused BYOK Vitest suites: pass",
+        "CI=1 npm run gulp -- vscode-win32-x64-min: pass",
+        "archive CRC and independent SHA-256 verification: pass",
+        "embedded provenance receipt matches release, source tree, flavor, platform, and architecture: pass",
+        "static artifact identity, gallery policy, bundled Copilot extension, and SDK entrypoint: pass",
+        "packaged CLI --version reports 1.130.0 and x64: pass"
+      ]
+    },
+    {
+      "platform": "linux-arm64",
+      "builder": "python-wsl-native",
+      "product_commit": "05923bf278a64a4588a6eeea02d6d3d9c4e8ca7b",
+      "artifact": "sprouted-code-2026.07.0-linux-arm64.tar.gz",
+      "sha256": "1a13e9e6167ea2bdf5470f2a377bdd152b6933427ffd53c7583501a9abda0704",
+      "tests": [
+        "Python build tooling: 85 passed, 1 Windows symlink-privilege skip",
+        "npm ci: pass",
+        "focused BYOK Vitest suites: pass",
+        "CI=1 npm run gulp -- vscode-linux-arm64-min: pass",
+        "gzip integrity and independent SHA-256 verification: pass",
+        "embedded provenance receipt matches release, source tree, flavor, platform, and architecture: pass",
+        "static artifact identity, gallery policy, bundled Copilot extension, and SDK entrypoint: pass",
+        "baseline Linux desktop dependency check: pass",
+        "packaged CLI --version reports 1.130.0 and arm64 on Ubuntu 20.04: pass",
+        "ABI inventory: GLIBC_2.34, GLIBCXX_3.4.29, CXXABI_1.3.11 maximum imports; known MXC and alternate musl payload findings"
+      ]
+    },
+    {
+      "platform": "linux-x64",
+      "builder": "python-proxmox-native",
+      "product_commit": "a16da1fd5237c57c67c542d1de595e633634a07a",
+      "artifact": "sprouted-code-2026.07.0-linux-x64.tar.gz",
+      "sha256": "393de9c7ca2d2275b403cef57188051b1d005457a6e45b25a43a2e34f2e7d427",
+      "tests": [
+        "Python build tooling: 85 passed, 1 Windows symlink-privilege skip",
+        "npm ci: pass",
+        "focused BYOK Vitest suites: pass",
+        "CI=1 npm run gulp -- vscode-linux-x64-min: pass",
+        "remote-to-local and independent SHA-256 verification: pass",
+        "gzip integrity: pass",
+        "embedded provenance receipt matches release, source tree, flavor, platform, and architecture: pass",
+        "static artifact identity, gallery policy, bundled Copilot extension, and SDK entrypoint: pass",
+        "baseline Linux desktop dependency check: pass",
+        "packaged CLI --version reports 1.130.0 and x64 on Ubuntu 20.04: pass",
+        "ABI inventory: GLIBC_2.34, GLIBCXX_3.4.30, CXXABI_1.3.13 maximum imports; known MXC, authentication, alternate musl, and optional GPU payload findings"
+      ]
+    },
+    {
+      "platform": "darwin-arm64",
+      "builder": "python-macos-remote",
+      "product_commit": "6d838430dbcdb6a886235e289588b4aef726f3d6",
+      "artifact": "sprouted-code-2026.07.0-darwin-arm64.zip",
+      "sha256": "b9387d61120865f95d1acdbc879a560b8572e2452a7f46d58864a490182b4aff",
+      "tests": [
+        "Python build tooling: 85 passed, 1 Windows symlink-privilege skip",
+        "npm ci: pass",
+        "focused BYOK Vitest suites: pass",
+        "CI=1 npm run gulp -- vscode-darwin-arm64-min: pass",
+        "remote-to-local and independent SHA-256 verification: pass",
+        "archive extraction preserves framework symlinks and provenance receipt: pass",
+        "Sprouted bundle identifier and sprouted-code CLI identity: pass",
+        "ad-hoc bundle signature and strict deep codesign verification after extraction: pass",
+        "packaged CLI --version reports 1.130.0 and arm64: pass"
+      ]
+    }
+  ]
+}

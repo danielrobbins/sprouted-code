@@ -1,0 +1,32 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "sprouted-code-build"
+version = "0.1.0"
+description = "Build and release tooling for Sprouted Code"
+requires-python = ">=3.11"
+license = "GPL-3.0-only"
+authors = [
+    { name = "Daniel Robbins", email = "drobbins@kernel-seeds.org" },
+]
+dependencies = [
+    "PyYAML>=6.0.2,<7",
+]
+
+[project.scripts]
+sprouted-build = "sprouted_build.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3,<10",
+    "ruff>=0.12,<1",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/sprouted_build"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"

@@ -1,0 +1,12 @@
+diff --git a/build/.moduleignore b/build/.moduleignore
+index 2c9cce6c02f..f941c60d7c9 100644
+--- a/build/.moduleignore
++++ b/build/.moduleignore
+@@ -222,7 +222,6 @@ vscode-textmate/webpack.config.js
+ @xterm/xterm-addon-*/out-test/**
+ 
+ # @github/copilot - strip unneeded binaries and files
+-@github/copilot/sdk/index.js
+ @github/copilot/prebuilds/**
+ @github/copilot/clipboard/**
+ @github/copilot/ripgrep/**
