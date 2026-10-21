@@ -1,4 +1,7 @@
+import os
 from pathlib import Path
+
+import pytest
 
 from sprouted_build.config import BuildConfig
 from sprouted_build.manifest import PatchSource, ReleaseManifest
@@ -6,12 +9,14 @@ from sprouted_build.wsl import WslBuilder
 from sprouted_build.wsl_source import build_wsl_prepare_script, windows_path_to_wsl
 
 
+@pytest.mark.skipif(os.name != "nt", reason="maps Windows drive-letter paths into WSL")
 def test_windows_path_to_wsl_maps_drive_letter_path() -> None:
     path = Path(r"C:\Users\builder\patches\fix.patch")
 
     assert windows_path_to_wsl(path) == "/mnt/c/Users/builder/patches/fix.patch"
 
 
+@pytest.mark.skipif(os.name != "nt", reason="maps Windows drive-letter paths into WSL")
 def test_prepare_script_uses_exact_manifest_commits_and_local_patch(
     tmp_path: Path,
 ) -> None:
