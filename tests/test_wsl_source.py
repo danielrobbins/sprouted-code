@@ -34,9 +34,7 @@ def test_prepare_script_uses_exact_manifest_commits_and_local_patch(
         base_repo="microsoft/vscode",
         base_commit="base-sha",
         base_branch="main",
-        patches=(
-            PatchSource("Local", "repo", "patches/local.patch", None),
-        ),
+        patches=(PatchSource("Local", "repo", "patches/local.patch", None),),
     )
     builder = WslBuilder("Ubuntu", "arm64", "~/repos/vscode", "24.18.0")
 

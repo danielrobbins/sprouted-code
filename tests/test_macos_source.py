@@ -29,9 +29,7 @@ def test_macos_prepare_uses_exact_commits_and_embeds_file_patches(
         base_repo="microsoft/vscode",
         base_commit="a" * 40,
         base_branch="main",
-        patches=(
-            PatchSource("Local", "build", "patches/local.patch", None),
-        ),
+        patches=(PatchSource("Local", "build", "patches/local.patch", None),),
         source_tree="c" * 40,
     )
     builder = MacOSBuilder(

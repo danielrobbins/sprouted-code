@@ -35,9 +35,7 @@ def build_wsl_prepare_script(
     file_patches = resolve_build_patches(config, manifest)
     commands: list[str] = []
     if not skip_fetch:
-        commands.append(
-            f"git fetch {upstream_url} {shlex.quote(manifest.base_branch)}"
-        )
+        commands.append(f"git fetch {upstream_url} {shlex.quote(manifest.base_branch)}")
     commands.append(f"git switch -C {build_branch} {base_commit}")
 
     for patch in file_patches:
