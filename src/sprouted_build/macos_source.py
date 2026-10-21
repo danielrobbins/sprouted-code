@@ -38,9 +38,7 @@ def build_macos_prepare_script(
         )
     )
     if not skip_fetch:
-        commands.append(
-            f"git fetch {upstream_url} {shlex.quote(manifest.base_branch)}"
-        )
+        commands.append(f"git fetch {upstream_url} {shlex.quote(manifest.base_branch)}")
     build_branch = f"{branch_prefix}/{manifest.release}"
     commands.append(
         f"git switch -C {shlex.quote(build_branch)} {shlex.quote(manifest.base_commit)}"

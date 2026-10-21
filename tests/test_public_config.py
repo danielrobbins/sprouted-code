@@ -45,7 +45,9 @@ def test_public_defaults_enable_gallery_without_signature_verification() -> None
     config = load_build_config(REPO_ROOT, include_local=False)
 
     assert config.get("source.upstream_remote") is None
-    assert config.get("source.upstream_url") == "https://github.com/microsoft/vscode.git"
+    assert (
+        config.get("source.upstream_url") == "https://github.com/microsoft/vscode.git"
+    )
     assert config.get("source.contribution_remote") is None
     assert config.get("source.contribution_url") is None
     assert config.get("product.extension_gallery.enabled") is True

@@ -26,9 +26,7 @@ def test_prepare_script_embeds_exact_manifest_patch_queue(tmp_path: Path) -> Non
         "microsoft/vscode",
         "base-sha",
         "main",
-        (
-            PatchSource("Local", "repo", "patches/fix.patch", None),
-        ),
+        (PatchSource("Local", "repo", "patches/fix.patch", None),),
     )
     builder = ProxmoxBuilder(
         "builder@host",
